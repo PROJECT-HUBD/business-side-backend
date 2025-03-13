@@ -2,10 +2,11 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\MemberController;
+use App\Http\Controllers\UserController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:sanctum');
 
-Route::get('/members',[MemberController::class,'index']);
+Route::get('/users', [UserController::class, 'index']); // 取得所有用戶
+Route::get('/users/{id}', [UserController::class, 'show']); // 取得特定用戶
