@@ -1,9 +1,14 @@
 {
     "private": true,
     "type": "module",
+    "name": "business-side-backend",
+    "version": "1.0.0",
+    "description": "",
+    "main": "app.js",
     "scripts": {
         "build": "vite build",
-        "dev": "vite"
+        "dev": "vite",
+        "start": "node app.js"
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0.0",
@@ -12,5 +17,10 @@
         "laravel-vite-plugin": "^1.2.0",
         "tailwindcss": "^4.0.0",
         "vite": "^6.0.11"
+    },
+    "dependencies": {
+        "cors": "^2.8.5",
+        "express": "^4.21.2",
+        "serve": "^14.2.4"
     }
 }
