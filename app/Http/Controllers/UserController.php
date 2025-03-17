@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 class UserController extends Controller
 {
     // 取得所有用戶資料
@@ -21,4 +22,25 @@ class UserController extends Controller
         }
         return response()->json($user);
     }
+
+
+    public function getUserOrders($id)
+{
+    $totalOrders = DB::table('order_main')
+        ->whereNotNull('id')//id不是null的
+        ->where('id', $id)//根據id查詢
+        ->where('trade_status', '交易成功') // 只計算交易成功的訂單
+        ->count();//計算訂單數
+
+    $totalSpent = DB::table('order_main')
+        ->whereNotNull('id')//id不是nill的
+        ->where('id', $id)
+        ->where('trade_status', '交易成功') // 只計算交易成功的訂單
+        ->sum('total_price_with_discount'); // 總消費金額
+
+    return response()->json([
+        'totalOrders' => $totalOrders,
+        'totalSpent' => (float)$totalSpent
+    ]);
+}
 }

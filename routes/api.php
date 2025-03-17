@@ -16,3 +16,4 @@ Route::get('/order/{order_id}', [OrderController::class, 'getOrder']);
 
 Route::get('/users', [UserController::class, 'index']); // 取得所有用戶
 Route::get('/users/{id}', [UserController::class, 'show']); // 取得特定用戶
+Route::get('/users/{id}/orders', [UserController::class, 'getUserOrders']);//獲取order_main資料
