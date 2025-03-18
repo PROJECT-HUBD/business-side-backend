@@ -142,12 +142,14 @@ class ProductController extends Controller
 
             $imageFolder = "public/products/{$request->parent_category}/{$request->child_category}/{$request->product_name}";
 
-            foreach ($imageFiles as $image) {
+            foreach ($imageFiles as $index => $image) {
                 $imagePath = $image->storeAs($imageFolder, $image->getClientOriginalName());
                 \Log::info("商品圖片儲存: ", ['images' => $request->file('images')]);
                 ProductImg::create([
                     'product_id' => $newProductId,
                     'product_img_URL' => str_replace('public/', '', $imagePath),
+                    'product_alt_text' => $request->input('product_name'),
+                    'product_display_order' => $index + 1
                 ]);
             }
         }
@@ -162,12 +164,14 @@ class ProductController extends Controller
 
             $displayFolder = "public/products_display/{$request->parent_category}/{$request->child_category}/{$request->product_name}";
 
-            foreach ($displayFiles as $image) {
+            foreach ($displayFiles as $index => $image) {
                 $imagePath = $image->storeAs($displayFolder, $image->getClientOriginalName());
                 \Log::info("產品展示圖片儲存: ", ['display_images' => $request->file('display_images')]);
                 ProductDisplayImg::create([
                     'product_id' => $newProductId,
                     'product_img_URL' => str_replace('public/', '', $imagePath),
+                    'product_alt_text' => $request->input('product_name'),
+                    'product_display_order' => $index + 1
                 ]);
             }
         }
@@ -179,28 +183,28 @@ class ProductController extends Controller
     }
 
     public static function insertProduct($childCategory, $product_name, $product_price, $product_description, $product_img, $product_status)
-{
-    $procedureMap = [
-        '異世界2000' => 'insert_product_pa',
-        '水晶晶系列' => 'insert_product_pa',
-        '長袖' => 'insert_product_pl',
-        '短袖' => 'insert_product_ps'
-    ];
+    {
+        $procedureMap = [
+            '異世界2000' => 'insert_product_pa',
+            '水晶晶系列' => 'insert_product_pa',
+            '長袖' => 'insert_product_pl',
+            '短袖' => 'insert_product_ps'
+        ];
 
-    $procedure = $procedureMap[$childCategory] ?? null;
+        $procedure = $procedureMap[$childCategory] ?? null;
 
-    if (!$procedure) {
-        return null;
+        if (!$procedure) {
+            return null;
+        }
+
+        return \DB::select("CALL {$procedure}(?, ?, ?, ?, ?)", [
+            $product_name,
+            $product_price,
+            $product_description,
+            $product_img,
+            $product_status // ✅ 這裡加上 product_status
+        ]);
     }
-
-    return \DB::select("CALL {$procedure}(?, ?, ?, ?, ?)", [
-        $product_name,
-        $product_price,
-        $product_description,
-        $product_img,
-        $product_status // ✅ 這裡加上 product_status
-    ]);
-}
 
     // 更新商品
     public function update(Request $request, $id)
