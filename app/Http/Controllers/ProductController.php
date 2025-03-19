@@ -66,6 +66,7 @@ class ProductController extends Controller
             $productImgPath = str_replace('public/', '', $productImgPath); // 移除 public 路徑
         }
 
+        \Log::info("收到的子分類：" . $request->child_category);
         // ✅ 呼叫預存程序來插入商品，並填入 product_img
         $product = Product::insertProduct(
             $request->child_category, // ✅ 傳入子分類
@@ -182,29 +183,33 @@ class ProductController extends Controller
         return response()->json(['message' => '商品新增成功', 'product_id' => $newProductId], 201);
     }
 
-    public static function insertProduct($childCategory, $product_name, $product_price, $product_description, $product_img, $product_status)
-    {
-        $procedureMap = [
-            '異世界2000' => 'insert_product_pa',
-            '水晶晶系列' => 'insert_product_pa',
-            '長袖' => 'insert_product_pl',
-            '短袖' => 'insert_product_ps'
-        ];
+    // public static function insertProduct($childCategory, $product_name, $product_price, $product_description, $product_img, $product_status)
+    // {
+    //     $childCategory = trim($childCategory);
+    //     $childCategory = mb_convert_encoding($childCategory, 'UTF-8', 'auto'); // 轉換編碼
+    //     \Log::info("清理後的子分類：" . json_encode($childCategory));
+    //     $procedureMap = [
+    //         "異世界2000" => 'insert_product_pai',
+    //         '水晶晶系列' => 'insert_product_pac',
+    //         '長袖' => 'insert_product_pl',
+    //         '短袖' => 'insert_product_ps'
+    //     ];
+    //     \Log::info("收到的子分類：" . $childCategory);
+    //     \Log::info("可用的預存程序對應：" . json_encode($procedureMap));
+    //     $procedure = $procedureMap[$childCategory] ?? null;
+    //     \Log::info("即將呼叫的預存程序：" . $procedure);
+    //     if (!$procedure) {
+    //         return null;
+    //     }
 
-        $procedure = $procedureMap[$childCategory] ?? null;
-
-        if (!$procedure) {
-            return null;
-        }
-
-        return \DB::select("CALL {$procedure}(?, ?, ?, ?, ?)", [
-            $product_name,
-            $product_price,
-            $product_description,
-            $product_img,
-            $product_status // ✅ 這裡加上 product_status
-        ]);
-    }
+    //     return \DB::select("CALL {$procedure}(?, ?, ?, ?, ?)", [
+    //         $product_name,
+    //         $product_price,
+    //         $product_description,
+    //         $product_img,
+    //         $product_status // ✅ 這裡加上 product_status
+    //     ]);
+    // }
 
     // 更新商品
     public function update(Request $request, $id)

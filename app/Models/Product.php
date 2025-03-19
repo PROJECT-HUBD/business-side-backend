@@ -46,7 +46,8 @@ class Product extends Model
     public static function insertProduct($category, $product_name, $product_price, $product_description, $product_img, $product_status)
     {
         $procedure = match ($category) {
-            '飾品' => 'insert_product_pa',
+            "異世界2000" => 'insert_product_pai',
+            '水晶晶系列' => 'insert_product_pac',
             '長袖' => 'insert_product_pl',
             '短袖' => 'insert_product_ps',
             default => null
