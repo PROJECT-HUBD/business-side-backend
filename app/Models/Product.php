@@ -24,11 +24,6 @@ class Product extends Model
         return $this->hasMany(ProductSpec::class, 'product_id', 'product_id');
     }
 
-    public function classifiction()
-    {
-        return $this->hasMany(ProductClassification::class,'category_id','category_id');
-    }
-
     // **關聯商品圖片**
     public function images()
     {
