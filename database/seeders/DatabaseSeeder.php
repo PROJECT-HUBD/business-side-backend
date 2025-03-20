@@ -13,11 +13,18 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
-
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
+        // 先執行優惠券和行銷活動的 Seeder
+        $this->call([
+            CouponSeeder::class,
+            CampaignSeeder::class,
         ]);
+        
+        // 創建測試用戶（如果不存在）
+        if (!User::where('email', 'test@example.com')->exists()) {
+            User::factory()->create([
+                'name' => 'Test User',
+                'email' => 'test@example.com',
+            ]);
+        }
     }
 }
