@@ -29,3 +29,8 @@ Route::get('/users/{id}/orders', [UserController::class, 'getUserOrders']);//獲
 // 賣場管理
 Route::get('/banners', [StoreController::class, 'index']);
 Route::post('/banners/{id}', [StoreController::class, 'update']); // 確保這裡是 POST
+
+// 維護管理
+Route::get('/maintenance', [MaintenanceController::class, 'index']);
+Route::post('/maintenance', [MaintenanceController::class, 'store']);
+Route::delete('/maintenance', [MaintenanceController::class, 'destroy']);
