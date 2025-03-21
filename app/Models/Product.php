@@ -30,6 +30,11 @@ class Product extends Model
         return $this->hasMany(ProductImg::class, 'product_id', 'product_id');
     }
 
+    public function classifiction()
+     {
+         return $this->hasMany(ProductClassification::class,'category_id','category_id');
+     }
+     
     // **關聯產品展示圖**
     public function displayImages()
     {
