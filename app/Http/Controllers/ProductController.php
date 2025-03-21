@@ -21,7 +21,7 @@ class ProductController extends Controller
     // 取得單一商品
     public function show($id)
     {
-        $product = Product::with(['specifications', 'images', 'information'])->find($id);
+        $product = Product::with(['specifications', 'images', 'information', 'displayImages', 'classifiction'])->find($id);
         if (!$product) {
             return response()->json(['error' => '商品不存在'], 404);
         }
