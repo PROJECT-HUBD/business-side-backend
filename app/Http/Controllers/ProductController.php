@@ -15,7 +15,7 @@ class ProductController extends Controller
     // 取得商品列表
     public function index()
     {
-        return response()->json(Product::with(['specifications', 'images', 'information'])->get());
+        return response()->json(Product::with(['specifications', 'images', 'information', 'displayImages', 'classifiction'])->get());
     }
 
     // 取得單一商品
@@ -52,7 +52,7 @@ class ProductController extends Controller
 
         $productImgPath = null;
         if ($request->hasFile('images')) {
-            $imageFolder = "public/products/{$request->parent_category}/{$request->child_category}/{$request->product_name}";
+            $imageFolder = "products/{$request->parent_category}/{$request->child_category}/{$request->product_name}";
             $images = $request->file('images');
 
             // 確保 images 是陣列
@@ -62,7 +62,7 @@ class ProductController extends Controller
 
             // 取得第一張圖片
             $firstImage = $images[0];
-            $productImgPath = $firstImage->storeAs($imageFolder, $firstImage->getClientOriginalName());
+            $productImgPath = $firstImage->storeAs($imageFolder, $firstImage->getClientOriginalName(), 'public');
             $productImgPath = str_replace('public/', '', $productImgPath); // 移除 public 路徑
         }
 
@@ -95,8 +95,17 @@ class ProductController extends Controller
         if (!empty($specifications)) {
             \Log::info("解析後的規格: " . json_encode($specifications));
             foreach ($specifications as $spec) {
+                // 生成唯一的 spec_id
+                $specId = 'SPEC' . date('YmdHis') . rand(1000, 9999);
+                
+                // 確保 spec_id 不重複
+                while (ProductSpec::where('spec_id', $specId)->exists()) {
+                    $specId = 'SPEC' . date('YmdHis') . rand(1000, 9999);
+                }
+
                 ProductSpec::create([
                     'product_id' => $newProductId,
+                    'spec_id' => $specId,
                     'product_size' => $spec['product_size'],
                     'product_color' => $spec['product_color'],
                     'product_stock' => $spec['product_stock'],
@@ -141,10 +150,10 @@ class ProductController extends Controller
                 $imageFiles = [$imageFiles];
             }
 
-            $imageFolder = "public/products/{$request->parent_category}/{$request->child_category}/{$request->product_name}";
+            $imageFolder = "products/{$request->parent_category}/{$request->child_category}/{$request->product_name}";
 
             foreach ($imageFiles as $index => $image) {
-                $imagePath = $image->storeAs($imageFolder, $image->getClientOriginalName());
+                $imagePath = $image->storeAs($imageFolder, $image->getClientOriginalName(), 'public');
                 \Log::info("商品圖片儲存: ", ['images' => $request->file('images')]);
                 ProductImg::create([
                     'product_id' => $newProductId,
@@ -163,10 +172,10 @@ class ProductController extends Controller
                 $displayFiles = [$displayFiles];
             }
 
-            $displayFolder = "public/products_display/{$request->parent_category}/{$request->child_category}/{$request->product_name}";
+            $displayFolder = "products_display/{$request->parent_category}/{$request->child_category}/{$request->product_name}";
 
             foreach ($displayFiles as $index => $image) {
-                $imagePath = $image->storeAs($displayFolder, $image->getClientOriginalName());
+                $imagePath = $image->storeAs($displayFolder, $image->getClientOriginalName(), 'public');
                 \Log::info("產品展示圖片儲存: ", ['display_images' => $request->file('display_images')]);
                 ProductDisplayImg::create([
                     'product_id' => $newProductId,
@@ -176,9 +185,6 @@ class ProductController extends Controller
                 ]);
             }
         }
-
-
-
 
         return response()->json(['message' => '商品新增成功', 'product_id' => $newProductId], 201);
     }
@@ -214,19 +220,156 @@ class ProductController extends Controller
     // 更新商品
     public function update(Request $request, $id)
     {
+        $request->validate([
+            'product_name' => 'required|string',
+            'parent_category' => 'required|string',
+            'child_category' => 'required|string',
+            'product_price' => 'required|numeric',
+            'product_description' => 'nullable|string',
+            'product_status' => 'required|string',
+            'specifications' => 'nullable|array',
+            'material' => 'nullable|string',
+            'specification' => 'nullable|string',
+            'shipping' => 'nullable|string',
+            'additional' => 'nullable|string',
+            'images.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'display_images.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+        ]);
+
         $product = Product::find($id);
         if (!$product) {
             return response()->json(['error' => '商品不存在'], 404);
         }
 
-        $product->update($request->only([
-            'product_name',
-            'category_id',
-            'product_price',
-            'product_description',
-            'product_status'
-        ]));
+        \Log::info('更新商品資訊: ', $request->all());
 
-        return response()->json($product);
+        // 更新基本資訊
+        $product->update([
+            'product_name' => $request->product_name,
+            'product_price' => $request->product_price,
+            'product_description' => $request->product_description,
+            'product_status' => $request->product_status
+        ]);
+
+        // 處理商品圖片
+        if ($request->hasFile('images')) {
+            // 先刪除原有圖片
+            foreach ($product->images as $image) {
+                Storage::disk('public')->delete($image->product_img_URL);
+            }
+            ProductImg::where('product_id', $id)->delete();
+
+            // 添加新圖片
+            $imageFiles = $request->file('images');
+            if (!is_array($imageFiles)) {
+                $imageFiles = [$imageFiles];
+            }
+
+            $imageFolder = "products/{$request->parent_category}/{$request->child_category}/{$request->product_name}";
+            
+            // 更新主圖
+            if (count($imageFiles) > 0) {
+                $firstImage = $imageFiles[0];
+                $productImgPath = $firstImage->storeAs($imageFolder, $firstImage->getClientOriginalName(), 'public');
+                $product->update([
+                    'product_img' => str_replace('public/', '', $productImgPath)
+                ]);
+            }
+
+            // 添加所有圖片
+            foreach ($imageFiles as $index => $image) {
+                $imagePath = $image->storeAs($imageFolder, $image->getClientOriginalName(), 'public');
+                ProductImg::create([
+                    'product_id' => $id,
+                    'product_img_URL' => str_replace('public/', '', $imagePath),
+                    'product_alt_text' => $request->input('product_name'),
+                    'product_display_order' => $index + 1
+                ]);
+            }
+        }
+
+        // 處理展示圖片
+        if ($request->hasFile('display_images')) {
+            // 先刪除原有展示圖
+            ProductDisplayImg::where('product_id', $id)->delete();
+
+            // 添加新展示圖
+            $displayFiles = $request->file('display_images');
+            if (!is_array($displayFiles)) {
+                $displayFiles = [$displayFiles];
+            }
+
+            $displayFolder = "products_display/{$request->parent_category}/{$request->child_category}/{$request->product_name}";
+
+            foreach ($displayFiles as $index => $image) {
+                $imagePath = $image->storeAs($displayFolder, $image->getClientOriginalName(), 'public');
+                ProductDisplayImg::create([
+                    'product_id' => $id,
+                    'product_img_URL' => str_replace('public/', '', $imagePath),
+                    'product_alt_text' => $request->input('product_name'),
+                    'product_display_order' => $index + 1
+                ]);
+            }
+        }
+
+        // 處理規格
+        if ($request->has('specifications')) {
+            // 先刪除原有規格
+            ProductSpec::where('product_id', $id)->delete();
+            
+            // 添加新規格
+            $specifications = $request->input('specifications');
+            if (!empty($specifications)) {
+                foreach ($specifications as $spec) {
+                    // 生成唯一的 spec_id
+                    $specId = 'SPEC' . date('YmdHis') . rand(1000, 9999);
+                    
+                    // 確保 spec_id 不重複
+                    while (ProductSpec::where('spec_id', $specId)->exists()) {
+                        $specId = 'SPEC' . date('YmdHis') . rand(1000, 9999);
+                    }
+
+                    ProductSpec::create([
+                        'product_id' => $id,
+                        'spec_id' => $specId,
+                        'product_size' => $spec['product_size'],
+                        'product_color' => $spec['product_color'],
+                        'product_stock' => $spec['product_stock'],
+                    ]);
+                }
+            }
+        }
+
+        // 處理商品須知
+        if ($request->has('material') || $request->has('specification') || 
+            $request->has('shipping') || $request->has('additional')) {
+            
+            // 先刪除原有商品須知
+            ProductInformation::where('product_id', $id)->delete();
+            
+            // 添加新商品須知
+            ProductInformation::create([
+                'product_id' => $id,
+                'title' => '材質',
+                'content' => $request->material,
+            ]);
+            ProductInformation::create([
+                'product_id' => $id,
+                'title' => '規格',
+                'content' => $request->specification,
+            ]);
+            ProductInformation::create([
+                'product_id' => $id,
+                'title' => '出貨說明',
+                'content' => $request->shipping,
+            ]);
+            ProductInformation::create([
+                'product_id' => $id,
+                'title' => '其他補充',
+                'content' => $request->additional,
+            ]);
+        }
+
+        return response()->json(['message' => '商品更新成功', 'product_id' => $id]);
     }
 }

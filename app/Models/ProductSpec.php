@@ -10,5 +10,5 @@ class ProductSpec extends Model
     use HasFactory;
 
     protected $table = 'product_spec';
-    protected $fillable = ['product_id', 'product_size', 'product_color', 'product_stock'];
+    protected $fillable = ['product_id', 'product_size', 'product_color', 'product_stock', 'spec_id'];
 }
