@@ -5,6 +5,9 @@ use App\Http\Controllers\API\CouponController;
 use App\Http\Controllers\API\MarketingStatsController;
 use App\Http\Controllers\API\CouponUsageController;
 use App\Http\Controllers\API\CampaignParticipantController;
+use App\Http\Controllers\API\ProductClassificationController;
+use App\Http\Controllers\API\ProductController;
+use App\Http\Controllers\API\UserController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -39,3 +42,15 @@ Route::get('/campaigns/{campaignId}/stats', [CampaignParticipantController::clas
 // 行銷統計數據
 Route::get('/marketing-stats', [MarketingStatsController::class, 'index']);
 Route::get('/marketing-stats/monthly', [MarketingStatsController::class, 'monthlyStats']);
+
+// 產品分類路由
+Route::get('/product-classifications', [ProductClassificationController::class, 'index']);
+Route::get('/product-classifications/{id}', [ProductClassificationController::class, 'show']);
+
+// 產品路由
+Route::get('/products', [ProductController::class, 'index']);
+Route::get('/products/{id}', [ProductController::class, 'show']);
+
+// 會員路由
+Route::get('/users', [UserController::class, 'index']);
+Route::get('/users/{id}', [UserController::class, 'show']);
