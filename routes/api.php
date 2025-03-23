@@ -8,6 +8,7 @@ use App\Http\Controllers\API\UserController;
 use App\Http\Controllers\API\CouponController;
 use App\Http\Controllers\API\CampaignController;
 use App\Http\Controllers\API\DashboardController;
+use App\Http\Controllers\API\PaymentController;
 
 // 使用者基本請求
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
@@ -49,3 +50,11 @@ Route::get('/dashboard/stats', [DashboardController::class, 'getStats']);
 Route::get('/dashboard/recent-orders', [DashboardController::class, 'getRecentOrders']);
 Route::get('/dashboard/sales-chart', [DashboardController::class, 'getSalesChart']);
 Route::get('/dashboard/product-stats', [DashboardController::class, 'getProductStats']);
+
+// 金流管理路由
+Route::get('/payments/dashboard', [PaymentController::class, 'dashboard']);
+Route::get('/payments/transactions', [PaymentController::class, 'getTransactions']);
+Route::get('/payments/daily/{date}', [PaymentController::class, 'getDailyTransactions']);
+Route::post('/payments/reconciliation/{date}', [PaymentController::class, 'updateReconciliation']);
+Route::get('/payments/export-csv', [PaymentController::class, 'exportCsv']);
+Route::get('/payments/export-excel', [PaymentController::class, 'exportExcel']);
