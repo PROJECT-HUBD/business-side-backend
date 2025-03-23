@@ -193,10 +193,16 @@ class PaymentController extends Controller
         $reconciliation->notes = $request->notes;
         $reconciliation->save();
         
-        // 更新相關交易的對帳狀態
+        // 更新相關交易的對帳狀態，但不更新payment_date欄位
         $isReconciled = ($request->status === 'matched');
-        PaymentTransaction::whereDate('payment_date', $date)
-            ->update(['is_reconciled' => $isReconciled]);
+        
+        // 獲取該日期的交易 IDs
+        $transactionIds = PaymentTransaction::whereDate('payment_date', $date)->pluck('id')->toArray();
+        
+        // 使用原始SQL更新，不更新timestamps
+        DB::statement("UPDATE payment_transactions SET is_reconciled = ? WHERE id IN (" . implode(',', $transactionIds) . ")", [
+            $isReconciled ? 1 : 0
+        ]);
         
         return response()->json([
             'message' => '對帳狀態已更新',
