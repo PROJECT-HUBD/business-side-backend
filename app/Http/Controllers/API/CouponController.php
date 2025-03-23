@@ -44,6 +44,8 @@ class CouponController extends Controller
             'products' => 'nullable|array',
             'categories' => 'nullable|array',
             'users' => 'nullable|array',
+            'applicable_products' => 'nullable|array',
+            'applicable_categories' => 'nullable|array',
             'buy_quantity' => 'required_if:discount_type,buy_x_get_y|nullable|integer',
             'free_quantity' => 'required_if:discount_type,buy_x_get_y|nullable|integer',
             'status' => 'nullable|in:active,disabled',
@@ -60,6 +62,16 @@ class CouponController extends Controller
         // 確保 users 欄位為陣列
         if (isset($data['users']) && !is_array($data['users'])) {
             $data['users'] = [];
+        }
+        
+        // 確保適用商品欄位為陣列
+        if (isset($data['applicable_products']) && !is_array($data['applicable_products'])) {
+            $data['applicable_products'] = [];
+        }
+        
+        // 確保適用分類欄位為陣列
+        if (isset($data['applicable_categories']) && !is_array($data['applicable_categories'])) {
+            $data['applicable_categories'] = [];
         }
         
         // 確保狀態欄位有值
@@ -99,6 +111,8 @@ class CouponController extends Controller
             'products' => 'nullable|array',
             'categories' => 'nullable|array',
             'users' => 'nullable|array',
+            'applicable_products' => 'nullable|array',
+            'applicable_categories' => 'nullable|array',
             'buy_quantity' => 'required_if:discount_type,buy_x_get_y|nullable|integer',
             'free_quantity' => 'required_if:discount_type,buy_x_get_y|nullable|integer',
             'status' => 'nullable|in:active,disabled',
@@ -115,6 +129,16 @@ class CouponController extends Controller
         // 確保 users 欄位為陣列
         if (isset($data['users']) && !is_array($data['users'])) {
             $data['users'] = [];
+        }
+        
+        // 確保適用商品欄位為陣列
+        if (isset($data['applicable_products']) && !is_array($data['applicable_products'])) {
+            $data['applicable_products'] = [];
+        }
+        
+        // 確保適用分類欄位為陣列
+        if (isset($data['applicable_categories']) && !is_array($data['applicable_categories'])) {
+            $data['applicable_categories'] = [];
         }
         
         // 如果結束日期在過去，狀態應自動設為 disabled

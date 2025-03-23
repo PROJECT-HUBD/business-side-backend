@@ -12,6 +12,9 @@ class User extends Authenticatable
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable;
 
+
+    // 指定關聯的資料表
+    protected $table = 'users';
     /**
      * The attributes that are mass assignable.
      *
@@ -21,8 +24,11 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'phone',
+        'birthday',
     ];
 
+    
     /**
      * The attributes that should be hidden for serialization.
      *

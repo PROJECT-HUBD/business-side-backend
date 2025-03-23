@@ -18,6 +18,9 @@ class ProductController extends Controller
             ->join('product_main', 'product_spec.product_id', '=', 'product_main.product_id')
             ->select(
                 'product_spec.spec_id as id', 
+                'product_spec.spec_id',  // 添加原始spec_id
+                'product_spec.product_id', // 添加product_id用於關聯
+                'product_main.product_id as main_product_id', // 添加主商品ID用於分組
                 'product_main.product_name as name', 
                 'product_main.product_price as price', 
                 'product_spec.spec_id as sku',
@@ -58,6 +61,9 @@ class ProductController extends Controller
             ->join('product_main', 'product_spec.product_id', '=', 'product_main.product_id')
             ->select(
                 'product_spec.spec_id as id', 
+                'product_spec.spec_id',  // 添加原始spec_id
+                'product_spec.product_id', // 添加product_id用於關聯
+                'product_main.product_id as main_product_id', // 添加主商品ID用於分組
                 'product_main.product_name as name', 
                 'product_main.product_price as price', 
                 'product_spec.spec_id as sku',
