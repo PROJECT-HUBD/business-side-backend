@@ -39,7 +39,7 @@ class Coupon extends Model
         'applicable_categories' => 'array',
         'start_date' => 'date',
         'end_date' => 'date',
-        'discount_value' => 'decimal:2',
+        'discount_value' => 'string',
         'min_purchase' => 'decimal:2',
         'usage_limit' => 'integer',
         'buy_quantity' => 'integer',

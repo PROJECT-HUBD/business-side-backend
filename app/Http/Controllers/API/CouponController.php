@@ -79,6 +79,12 @@ class CouponController extends Controller
             $data['status'] = 'active';
         }
         
+        // 確保discount_value是精確值，而不是四捨五入的結果
+        if (isset($data['discount_value']) && is_numeric($data['discount_value'])) {
+            // 強制轉換為字串，確保不會有小數點精度問題
+            $data['discount_value'] = (string)$data['discount_value'];
+        }
+        
         // 如果開始日期在未來，狀態為 active，但實際上是未來生效
         // 結束日期在過去，狀態應自動設為 disabled
         if (!empty($data['end_date']) && Carbon::parse($data['end_date'])->isPast() && $data['status'] === 'active') {
@@ -139,6 +145,17 @@ class CouponController extends Controller
         // 確保適用分類欄位為陣列
         if (isset($data['applicable_categories']) && !is_array($data['applicable_categories'])) {
             $data['applicable_categories'] = [];
+        }
+        
+        // 確保狀態欄位有值
+        if (empty($data['status'])) {
+            $data['status'] = 'active';
+        }
+        
+        // 確保discount_value是精確值，而不是四捨五入的結果
+        if (isset($data['discount_value']) && is_numeric($data['discount_value'])) {
+            // 強制轉換為字串，確保不會有小數點精度問題
+            $data['discount_value'] = (string)$data['discount_value'];
         }
         
         // 如果結束日期在過去，狀態應自動設為 disabled
