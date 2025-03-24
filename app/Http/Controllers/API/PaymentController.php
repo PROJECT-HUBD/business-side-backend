@@ -677,4 +677,67 @@ class PaymentController extends Controller
             'completedReconciliation' => $completedReconciliation
         ]);
     }
+
+    /**
+     * 獲取單筆訂單詳情
+     * 
+     * @param string $orderId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getOrderDetail($orderId)
+    {
+        // 獲取訂單主表資訊
+        $order = DB::table('order_main')->where('order_id', $orderId)->first();
+        
+        if (!$order) {
+            return response()->json(['error' => '找不到訂單'], 404);
+        }
+        
+        // 獲取訂單詳細項目
+        $orderItems = DB::table('order_detail')->where('order_id', $orderId)->get();
+        
+        // 組合訂單完整資訊
+        $orderData = (array) $order;
+        $orderData['order_items'] = $orderItems;
+        
+        return response()->json($orderData);
+    }
+
+    /**
+     * 獲取金流圖表數據 (用於前端圖表展示)
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getChartData(Request $request)
+    {
+        $startDate = $request->input('start_date', Carbon::now()->subDays(30)->format('Y-m-d'));
+        $endDate = $request->input('end_date', Carbon::now()->format('Y-m-d'));
+        $paymentMethod = $request->input('payment_method');
+        
+        // 暫時關閉 ONLY_FULL_GROUP_BY 限制
+        DB::statement("SET SQL_MODE=''");
+        
+        $query = DB::table('order_main')
+            ->selectRaw('DATE(trade_Date) as date')
+            ->selectRaw('COUNT(*) as transaction_count')
+            ->selectRaw('SUM(total_price_with_discount) as total_amount')
+            ->selectRaw('SUM(IFNULL(fee_amount, 0)) as total_fee')
+            ->selectRaw('SUM(total_price_with_discount - IFNULL(fee_amount, 0)) as total_net_amount')
+            ->whereNotNull('trade_Date')
+            ->whereBetween('trade_Date', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
+            
+        if ($paymentMethod) {
+            $query->where('payment_type', $paymentMethod);
+        }
+        
+        $chartData = $query->groupBy(DB::raw('DATE(trade_Date)'))
+            ->orderBy('date', 'asc')
+            ->get();
+            
+        // 恢復正常的 SQL_MODE
+        DB::statement("SET SQL_MODE=(SELECT @@sql_mode)");
+        
+        return response()->json($chartData);
+    }
 }

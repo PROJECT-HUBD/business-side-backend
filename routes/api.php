@@ -63,8 +63,8 @@ Route::get('/payments/export-excel', [PaymentController::class, 'exportExcel']);
 // 金流設定相關路由
 Route::prefix('cash-flow-settings')->group(function () {
     Route::get('/', 'App\Http\Controllers\API\CashFlowController@index');
-    Route::get('/{name}', 'App\Http\Controllers\API\CashFlowController@show');
     Route::post('/', 'App\Http\Controllers\API\CashFlowController@store');
+    Route::get('/{name}', 'App\Http\Controllers\API\CashFlowController@show');
     Route::put('/{name}', 'App\Http\Controllers\API\CashFlowController@update');
     Route::delete('/{name}', 'App\Http\Controllers\API\CashFlowController@destroy');
 });
@@ -77,6 +77,8 @@ Route::prefix('transactions')->group(function () {
     Route::get('/stats', 'App\Http\Controllers\API\PaymentController@getDailyTransactionStats');
     Route::get('/export-excel', 'App\Http\Controllers\API\PaymentController@exportExcel');
     Route::get('/export-csv', 'App\Http\Controllers\API\PaymentController@exportCsv');
+    Route::get('/order/{orderId}', 'App\Http\Controllers\API\PaymentController@getOrderDetail');
+    Route::get('/chart-data', 'App\Http\Controllers\API\PaymentController@getChartData');
 });
 
 // 對帳相關路由
