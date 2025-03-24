@@ -17,6 +17,10 @@ class DatabaseSeeder extends Seeder
         $this->call([
             CouponSeeder::class,
             CampaignSeeder::class,
+            // 金流相關的 Seeder
+            PaymentTransactionSeeder::class,
+            PaymentReconciliationSeeder::class,
+            TransactionSeeder::class,
         ]);
         
         // 創建測試用戶（如果不存在）

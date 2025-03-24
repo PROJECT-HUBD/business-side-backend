@@ -58,3 +58,22 @@ Route::get('/payments/daily/{date}', [PaymentController::class, 'getDailyTransac
 Route::post('/payments/reconciliation/{date}', [PaymentController::class, 'updateReconciliation']);
 Route::get('/payments/export-csv', [PaymentController::class, 'exportCsv']);
 Route::get('/payments/export-excel', [PaymentController::class, 'exportExcel']);
+
+// 新增前端需要的金流管理路由
+Route::get('/transactions', [PaymentController::class, 'getTransactions']);
+Route::get('/transactions/stats', [PaymentController::class, 'getStats']);
+Route::get('/reconciliations', [PaymentController::class, 'getReconciliations']);
+Route::post('/transactions/{id}/reconcile', [PaymentController::class, 'reconcileTransaction']);
+
+// 金流管理相關路由 (新版 - 基於日交易)
+Route::prefix('transactions')->group(function () {
+    Route::get('/daily-summary', 'App\Http\Controllers\API\PaymentController@getDailyTransactionsSummary');
+    Route::get('/daily/{date}', 'App\Http\Controllers\API\PaymentController@getDailyTransactionDetail');
+    Route::post('/{transactionId}/note', 'App\Http\Controllers\API\PaymentController@addOrderNote');
+    Route::get('/stats', 'App\Http\Controllers\API\PaymentController@getDailyTransactionStats');
+});
+
+Route::prefix('reconciliations')->group(function () {
+    Route::get('/', 'App\Http\Controllers\API\PaymentController@getDailyReconciliations');
+    Route::post('/daily/{date}', 'App\Http\Controllers\API\PaymentController@reconcileDailyTransactions');
+});

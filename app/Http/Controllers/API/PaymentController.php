@@ -101,28 +101,10 @@ class PaymentController extends Controller
             }
         }
         
-        // 按日期獲取分組的交易數據
-        $groupedTransactions = $query->select(
-                DB::raw('DATE(payment_date) as date'),
-                DB::raw('COUNT(*) as transaction_count'),
-                DB::raw('SUM(amount) as total_amount'),
-                DB::raw('SUM(fee) as total_fee'),
-                DB::raw('SUM(net_amount) as total_net_amount')
-            )
-            ->groupBy('date')
-            ->orderByDesc('date');
+        // 直接返回結果，不分組
+        $transactions = $query->latest('payment_date')->get();
         
-        // 依據分組後的數據加入對帳狀態
-        $data = $groupedTransactions->paginate($perPage);
-        
-        // 加入對帳狀態資訊
-        foreach ($data as $item) {
-            $date = $item->date;
-            $reconciliation = PaymentReconciliation::where('reconciliation_date', $date)->first();
-            $item->reconcile_status = $reconciliation ? $reconciliation->status : 'pending';
-        }
-        
-        return response()->json($data);
+        return response()->json($transactions);
     }
     
     /**
@@ -314,6 +296,385 @@ class PaymentController extends Controller
         return response()->json([
             'data' => $exportData,
             'filename' => $filename,
+        ]);
+    }
+    
+    /**
+     * 獲取金流統計數據 (用於前端)
+     */
+    public function getStats()
+    {
+        // 總收入 (已完成交易)
+        $totalIncome = PaymentTransaction::where('status', 'completed')
+            ->sum('amount');
+            
+        // 總支出 (退款等)
+        $totalOutcome = PaymentTransaction::where('status', 'refunded')
+            ->sum('amount');
+            
+        // 待對帳交易數量
+        $pendingReconciliation = PaymentTransaction::where('status', 'completed')
+            ->where('is_reconciled', false)
+            ->count();
+            
+        // 已對帳交易數量
+        $completedReconciliation = PaymentTransaction::where('status', 'completed')
+            ->where('is_reconciled', true)
+            ->count();
+            
+        return response()->json([
+            'totalIncome' => $totalIncome,
+            'totalOutcome' => $totalOutcome,
+            'pendingReconciliation' => $pendingReconciliation,
+            'completedReconciliation' => $completedReconciliation
+        ]);
+    }
+    
+    /**
+     * 獲取對帳記錄列表
+     */
+    public function getReconciliations()
+    {
+        $reconciliations = PaymentReconciliation::orderBy('reconciliation_date', 'desc')
+            ->get()
+            ->map(function ($item) {
+                // 生成對帳編號
+                $reconciliationNumber = 'R-' . str_replace('-', '', $item->reconciliation_date) . '-' . str_pad($item->id, 4, '0', STR_PAD_LEFT);
+                
+                return [
+                    'id' => $item->id,
+                    'reconciliation_number' => $reconciliationNumber,
+                    'reconciliation_date' => $item->reconciliation_date,
+                    'transaction_count' => $item->transaction_count,
+                    'total_amount' => $item->total_amount,
+                    'staff_name' => $item->staff_name ?? 'System',
+                    'status' => $item->status,
+                    'notes' => $item->notes,
+                    'created_at' => $item->created_at
+                ];
+            });
+            
+        return response()->json($reconciliations);
+    }
+    
+    /**
+     * 對帳單筆交易
+     */
+    public function reconcileTransaction($id)
+    {
+        $transaction = PaymentTransaction::findOrFail($id);
+        
+        if ($transaction->status !== 'completed') {
+            return response()->json([
+                'message' => '只有已完成的交易可以進行對帳'
+            ], 400);
+        }
+        
+        // 更新交易對帳狀態
+        $transaction->is_reconciled = true;
+        $transaction->save();
+        
+        // 取得或創建對帳記錄
+        $date = $transaction->payment_date->toDateString();
+        $reconciliation = PaymentReconciliation::firstOrNew(['reconciliation_date' => $date]);
+        
+        // 如果是新記錄，計算統計資料
+        if (!$reconciliation->exists) {
+            $dayTransactions = PaymentTransaction::whereDate('payment_date', $date)->get();
+            $reconciliation->transaction_count = $dayTransactions->count();
+            $reconciliation->total_amount = $dayTransactions->sum('amount');
+            $reconciliation->total_fee = $dayTransactions->sum('fee');
+            $reconciliation->total_net_amount = $dayTransactions->sum('net_amount');
+            $reconciliation->status = 'completed';
+        }
+        
+        // 添加新的交易對帳註記
+        $notes = $reconciliation->notes ?? '';
+        $reconciliation->notes = trim($notes . "\n" . "Transaction {$transaction->transaction_id} reconciled on " . now());
+        $reconciliation->save();
+        
+        // 生成新的對帳記錄
+        $reconciliationNumber = 'R-' . str_replace('-', '', $date) . '-' . rand(1000, 9999);
+        
+        return response()->json([
+            'message' => '交易已成功對帳',
+            'transaction' => [
+                'id' => $transaction->id,
+                'transaction_number' => $transaction->transaction_id,
+                'reconciliation_status' => 'completed'
+            ],
+            'reconciliation' => [
+                'reconciliation_number' => $reconciliationNumber,
+                'reconciliation_date' => $date,
+                'transaction_number' => $transaction->transaction_id
+            ]
+        ]);
+    }
+
+    /**
+     * 獲取指定日期範圍內的日交易概覽 (新版 - 按日分組)
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getDailyTransactionsSummary(Request $request)
+    {
+        $startDate = $request->input('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
+        $endDate = $request->input('end_date', Carbon::now()->format('Y-m-d'));
+        $paymentMethod = $request->input('payment_method');
+        $reconciliationStatus = $request->input('reconciliation_status');
+        
+        // 使用SQL_MODE='' 暫時關閉 ONLY_FULL_GROUP_BY 限制
+        DB::statement("SET SQL_MODE=''");
+        
+        $query = DB::table('order_main')
+            ->selectRaw('DATE(trade_Date) as date')
+            ->selectRaw('COUNT(*) as transaction_count')
+            ->selectRaw('SUM(total_price_with_discount) as total_amount')
+            ->selectRaw('SUM(IFNULL(fee_amount, 0)) as total_fee')
+            ->selectRaw('SUM(total_price_with_discount - IFNULL(fee_amount, 0)) as total_net_amount')
+            ->selectRaw('MAX(CASE WHEN reconciliation_status = "completed" THEN "completed" ELSE "pending" END) as reconciliation_status')
+            ->selectRaw('MAX(reconciliation_notes) as reconciliation_notes')
+            ->selectRaw('EXISTS(SELECT 1 FROM order_main om WHERE DATE(om.trade_Date) = DATE(order_main.trade_Date) AND om.notes IS NOT NULL AND om.notes != "") as has_note')
+            ->whereNotNull('trade_Date')
+            ->whereBetween('trade_Date', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
+        
+        if ($paymentMethod) {
+            $query->where('payment_type', $paymentMethod);
+        }
+        
+        if ($reconciliationStatus) {
+            $query->where('reconciliation_status', $reconciliationStatus);
+        }
+        
+        $dailyTransactions = $query->groupBy(DB::raw('DATE(trade_Date)'))
+            ->orderBy('date', 'desc')
+            ->get();
+        
+        // 恢復正常的 SQL_MODE
+        DB::statement("SET SQL_MODE=(SELECT @@sql_mode)");
+        
+        return response()->json($dailyTransactions);
+    }
+    
+    /**
+     * 獲取指定日期的所有交易詳情 (新版 - 從 order_main 表)
+     * 
+     * @param Request $request
+     * @param string $date
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getDailyTransactionDetail(Request $request, $date)
+    {
+        // 驗證日期格式
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            return response()->json(['error' => '日期格式不正確，正確格式為 YYYY-MM-DD'], 400);
+        }
+        
+        // 獲取該日所有交易
+        $transactions = DB::table('order_main as om')
+            ->select([
+                'om.id',
+                'om.order_id',
+                'om.trade_No as transaction_id',
+                'om.total_price_with_discount as amount',
+                'om.trade_Date as payment_date',
+                'om.payment_type as payment_method',
+                'om.trade_status as status',
+                'om.reconciliation_status',
+                'om.notes'
+            ])
+            ->whereRaw('DATE(om.trade_Date) = ?', [$date])
+            ->orderBy('om.trade_Date', 'desc')
+            ->get();
+        
+        // 獲取該日交易統計
+        $stats = DB::table('order_main')
+            ->select([
+                DB::raw('COUNT(*) as transaction_count'),
+                DB::raw('SUM(total_price_with_discount) as total_amount'),
+                DB::raw('SUM(fee_amount) as total_fee'),
+                DB::raw('SUM(total_price_with_discount - fee_amount) as total_net_amount'),
+                DB::raw('MAX(CASE WHEN reconciliation_status = "completed" THEN "completed" ELSE "pending" END) as reconciliation_status'),
+                DB::raw('MAX(reconciliation_notes) as reconciliation_notes'),
+            ])
+            ->whereRaw('DATE(trade_Date) = ?', [$date])
+            ->first();
+        
+        // 獲取訂單詳情 (可選，如果需要顯示訂單項目)
+        foreach ($transactions as $transaction) {
+            $orderDetails = DB::table('order_detail')
+                ->where('order_id', $transaction->order_id)
+                ->get();
+                
+            $transaction->order_items = $orderDetails;
+        }
+        
+        return response()->json([
+            'date' => $date,
+            'stats' => $stats,
+            'transactions' => $transactions
+        ]);
+    }
+
+    /**
+     * 對指定日期的交易進行對帳 (新版 - 使用 order_main 表)
+     * 
+     * @param Request $request
+     * @param string $date
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function reconcileDailyTransactions(Request $request, $date)
+    {
+        // 驗證日期格式
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            return response()->json(['error' => '日期格式不正確，正確格式為 YYYY-MM-DD'], 400);
+        }
+        
+        // 驗證狀態
+        $status = $request->input('status', 'normal');
+        if (!in_array($status, ['normal', 'abnormal', 'pending'])) {
+            return response()->json(['error' => '狀態不正確，應為 normal, abnormal 或 pending'], 400);
+        }
+        
+        $notes = $request->input('notes', '系統自動對帳');
+        
+        // 更新該日所有交易的對帳狀態
+        $affectedRows = DB::table('order_main')
+            ->whereRaw('DATE(trade_Date) = ?', [$date])
+            ->update([
+                'reconciliation_status' => $status,
+                'reconciliation_notes' => $notes,
+                'reconciliation_date' => Carbon::now(),
+                'updated_at' => Carbon::now()
+            ]);
+        
+        // 產生對帳紀錄
+        if ($affectedRows > 0) {
+            // 獲取交易統計
+            $stats = DB::table('order_main')
+                ->select([
+                    DB::raw('COUNT(*) as transaction_count'),
+                    DB::raw('SUM(total_price_with_discount) as total_amount'),
+                ])
+                ->whereRaw('DATE(trade_Date) = ?', [$date])
+                ->first();
+            
+            // 插入對帳紀錄
+            $reconciliationId = DB::table('reconciliations')->insertGetId([
+                'reconciliation_number' => 'REC' . time(),
+                'reconciliation_date' => $date,
+                'transaction_count' => $stats->transaction_count,
+                'total_amount' => $stats->total_amount,
+                'staff_id' => $request->user() ? $request->user()->id : null,
+                'staff_name' => $request->user() ? $request->user()->name : '系統',
+                'status' => $status, // 儲存對帳狀態
+                'notes' => $notes,
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now()
+            ]);
+        }
+        
+        return response()->json([
+            'success' => true,
+            'message' => '對帳成功',
+            'affected_rows' => $affectedRows,
+            'reconciliation_id' => $reconciliationId ?? null
+        ]);
+    }
+    
+    /**
+     * 獲取對帳記錄列表 (新版 - 使用 reconciliations 表)
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getDailyReconciliations(Request $request)
+    {
+        $startDate = $request->input('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
+        $endDate = $request->input('end_date', Carbon::now()->format('Y-m-d'));
+        
+        $reconciliations = DB::table('reconciliations')
+            ->whereBetween('reconciliation_date', [$startDate, $endDate])
+            ->orderBy('reconciliation_date', 'desc')
+            ->get();
+        
+        return response()->json($reconciliations);
+    }
+
+    /**
+     * 為特定交易添加備註 (使用 order_main 表)
+     * 
+     * @param Request $request
+     * @param int $transactionId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function addOrderNote(Request $request, $transactionId)
+    {
+        $note = $request->input('note');
+        
+        if (!$note) {
+            return response()->json(['error' => '備註內容不能為空'], 400);
+        }
+        
+        $updated = DB::table('order_main')
+            ->where('id', $transactionId)
+            ->update([
+                'notes' => $note,
+                'updated_at' => Carbon::now()
+            ]);
+        
+        if (!$updated) {
+            return response()->json(['error' => '交易記錄不存在'], 404);
+        }
+        
+        return response()->json(['success' => true, 'message' => '備註已添加']);
+    }
+
+    /**
+     * 獲取金流統計資料 (新版 - 使用 order_main 表)
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getDailyTransactionStats(Request $request)
+    {
+        // 暫時關閉 ONLY_FULL_GROUP_BY 限制
+        DB::statement("SET SQL_MODE=''");
+        
+        // 計算總收入 (正向交易)
+        $totalIncome = DB::table('order_main')
+            ->where('total_price_with_discount', '>', 0)
+            ->sum('total_price_with_discount');
+        
+        // 計算總支出 (負向交易，如退款)
+        $totalOutcome = DB::table('order_main')
+            ->where('total_price_with_discount', '<', 0)
+            ->sum('total_price_with_discount');
+        
+        // 計算未對帳的天數
+        $pendingReconciliation = DB::table('order_main')
+            ->select(DB::raw('DATE(trade_Date) as date'))
+            ->whereNull('reconciliation_status')
+            ->orWhere('reconciliation_status', '!=', 'completed')
+            ->groupBy(DB::raw('DATE(trade_Date)'))
+            ->count();
+        
+        // 計算已對帳的天數
+        $completedReconciliation = DB::table('order_main')
+            ->select(DB::raw('DATE(trade_Date) as date'))
+            ->where('reconciliation_status', 'completed')
+            ->groupBy(DB::raw('DATE(trade_Date)'))
+            ->count();
+        
+        // 恢復正常的 SQL_MODE
+        DB::statement("SET SQL_MODE=(SELECT @@sql_mode)");
+        
+        return response()->json([
+            'totalIncome' => $totalIncome,
+            'totalOutcome' => abs($totalOutcome),
+            'pendingReconciliation' => $pendingReconciliation,
+            'completedReconciliation' => $completedReconciliation
         ]);
     }
 }

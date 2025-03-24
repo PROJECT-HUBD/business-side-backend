@@ -83,6 +83,9 @@ class MarketingStatsController extends Controller
      */
     public function monthlyStats(Request $request)
     {
+        // 暫時關閉 ONLY_FULL_GROUP_BY 限制
+        DB::statement("SET SQL_MODE=''");
+        
         // 預設為當前月份
         $year = $request->input('year', Carbon::now()->year);
         $month = $request->input('month', Carbon::now()->month);
@@ -114,6 +117,9 @@ class MarketingStatsController extends Controller
             ->limit(5)
             ->with('coupon:id,title,code')
             ->get();
+        
+        // 恢復正常的 SQL_MODE
+        DB::statement("SET SQL_MODE=(SELECT @@sql_mode)");
         
         // 熱門活動
         $popularCampaigns = CampaignParticipant::where('status', 'completed')

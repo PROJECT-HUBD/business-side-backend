@@ -8,6 +8,7 @@ use App\Models\CouponUsage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class CouponUsageController extends Controller
 {
@@ -91,6 +92,9 @@ class CouponUsageController extends Controller
      */
     public function getStats($couponId)
     {
+        // 暫時關閉 ONLY_FULL_GROUP_BY 限制
+        DB::statement("SET SQL_MODE=''");
+        
         $coupon = Coupon::findOrFail($couponId);
         
         $totalUsage = $coupon->usage_count;
@@ -102,6 +106,9 @@ class CouponUsageController extends Controller
             ->orderBy('date', 'desc')
             ->limit(30)
             ->get();
+        
+        // 恢復正常的 SQL_MODE
+        DB::statement("SET SQL_MODE=(SELECT @@sql_mode)");
         
         return response()->json([
             'total_usage' => $totalUsage,
