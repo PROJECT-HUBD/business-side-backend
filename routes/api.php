@@ -9,6 +9,7 @@ use App\Http\Controllers\API\CouponController;
 use App\Http\Controllers\API\CampaignController;
 use App\Http\Controllers\API\DashboardController;
 use App\Http\Controllers\API\PaymentController;
+use App\Http\Controllers\API\CashFlowController;
 
 // 使用者基本請求
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
@@ -59,20 +60,26 @@ Route::post('/payments/reconciliation/{date}', [PaymentController::class, 'updat
 Route::get('/payments/export-csv', [PaymentController::class, 'exportCsv']);
 Route::get('/payments/export-excel', [PaymentController::class, 'exportExcel']);
 
-// 新增前端需要的金流管理路由
-Route::get('/transactions', [PaymentController::class, 'getTransactions']);
-Route::get('/transactions/stats', [PaymentController::class, 'getStats']);
-Route::get('/reconciliations', [PaymentController::class, 'getReconciliations']);
-Route::post('/transactions/{id}/reconcile', [PaymentController::class, 'reconcileTransaction']);
+// 金流設定相關路由
+Route::prefix('cash-flow-settings')->group(function () {
+    Route::get('/', 'App\Http\Controllers\API\CashFlowController@index');
+    Route::get('/{name}', 'App\Http\Controllers\API\CashFlowController@show');
+    Route::post('/', 'App\Http\Controllers\API\CashFlowController@store');
+    Route::put('/{name}', 'App\Http\Controllers\API\CashFlowController@update');
+    Route::delete('/{name}', 'App\Http\Controllers\API\CashFlowController@destroy');
+});
 
-// 金流管理相關路由 (新版 - 基於日交易)
+// 金流數據相關路由
 Route::prefix('transactions')->group(function () {
     Route::get('/daily-summary', 'App\Http\Controllers\API\PaymentController@getDailyTransactionsSummary');
     Route::get('/daily/{date}', 'App\Http\Controllers\API\PaymentController@getDailyTransactionDetail');
     Route::post('/{transactionId}/note', 'App\Http\Controllers\API\PaymentController@addOrderNote');
     Route::get('/stats', 'App\Http\Controllers\API\PaymentController@getDailyTransactionStats');
+    Route::get('/export-excel', 'App\Http\Controllers\API\PaymentController@exportExcel');
+    Route::get('/export-csv', 'App\Http\Controllers\API\PaymentController@exportCsv');
 });
 
+// 對帳相關路由
 Route::prefix('reconciliations')->group(function () {
     Route::get('/', 'App\Http\Controllers\API\PaymentController@getDailyReconciliations');
     Route::post('/daily/{date}', 'App\Http\Controllers\API\PaymentController@reconcileDailyTransactions');
