@@ -1,7 +1,5 @@
 <?php
 
-// app/Models/Maintenance.php
-
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -11,8 +9,9 @@ class Maintenance extends Model
 {
     use HasFactory;
 
-    protected $table = 'maintenance';
+    protected $table = 'maintenance';    protected $primaryKey = 'maintain_status';
     public $incrementing = true;
+    public $timestamps = false;
 
     protected $fillable = [
         'maintain_status',
@@ -20,5 +19,4 @@ class Maintenance extends Model
         'end_date',
         'maintain_description',
     ];
-  
 }

@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\ProductController;
+use App\Http\Controllers\OrderController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -34,3 +34,8 @@ Route::post('/banners/{id}', [StoreController::class, 'update']); // 確保這�
 Route::get('/maintenance', [MaintenanceController::class, 'index']);
 Route::post('/maintenance', [MaintenanceController::class, 'store']);
 Route::delete('/maintenance', [MaintenanceController::class, 'destroy']);
+
+// 維護管理
+Route::get('/maintenance', [MaintenanceController::class, 'indexMaintenance']);
+Route::post('/maintenance', [MaintenanceController::class, 'storeMaintenance']);
+Route::delete('/maintenance', [MaintenanceController::class, 'destroyMaintenance']);
