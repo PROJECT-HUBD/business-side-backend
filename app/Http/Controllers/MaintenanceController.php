@@ -1,24 +1,23 @@
 <?php
 
-// app/Http/Controllers/MaintenanceController.php
 
 namespace App\Http\Controllers;
 
 use App\Models\Maintenance;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Response;
+
 
 class MaintenanceController extends Controller
 {
     // Fetch the current maintenance settings
-    public function index()
+    public function indexMaintenance()
     {
         $maintenance = Maintenance::first(); // Get the first record
         return response()->json($maintenance);
     }
 
     // Store or update maintenance settings
-    public function store(Request $request)
+    public function storeMaintenance(Request $request)
     {
         $validated = $request->validate([
             'maintain_status' => 'required|boolean',
@@ -28,7 +27,7 @@ class MaintenanceController extends Controller
         ]);
 
         $maintenance = Maintenance::updateOrCreate(
-            ['id' => 1], // Assuming only one record for the maintenance
+            ['maintain_status' => 1], // Assuming only one record for the maintenance
             $validated
         );
 
@@ -36,10 +35,9 @@ class MaintenanceController extends Controller
     }
 
     // Delete the maintenance settings
-    public function destroy()
+    public function destroyMaintenance()
     {
-        Maintenance::where('id', 1)->delete(); // Assuming only one record for the maintenance
+        Maintenance::where('maintain_status', 1)->delete(); // Assuming only one record for the maintenance
         return response()->json(['message' => 'Maintenance data cleared']);
     }
 }
-
