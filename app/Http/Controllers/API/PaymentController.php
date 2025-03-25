@@ -16,16 +16,28 @@ class PaymentController extends Controller
      */
     public function dashboard(Request $request)
     {
-        // 預設為當前月份
-        $startDate = $request->get('start_date') ? Carbon::parse($request->get('start_date')) : Carbon::now()->startOfMonth();
-        $endDate = $request->get('end_date') ? Carbon::parse($request->get('end_date')) : Carbon::now()->endOfMonth();
+        // 獲取原始日期字符串
+        $rawStartDate = $request->get('start_date');
+        $rawEndDate = $request->get('end_date');
+        
+        // 解析日期並設置為當日開始/結束時間
+        $startDate = $rawStartDate ? Carbon::parse($rawStartDate)->startOfDay() : Carbon::now()->startOfMonth()->startOfDay();
+        $endDate = $rawEndDate ? Carbon::parse($rawEndDate)->endOfDay() : Carbon::now()->endOfMonth()->endOfDay();
+        
+        // 調試日誌
+        \Log::info('Dashboard API Request', [
+            'raw_start_date' => $rawStartDate,
+            'raw_end_date' => $rawEndDate,
+            'parsed_start_date' => $startDate->toDateTimeString(),
+            'parsed_end_date' => $endDate->toDateTimeString(),
+        ]);
         
         // 篩選支付方式
         $paymentMethod = $request->get('payment_method');
         
         // 基本查詢構建 - 使用 order_main 表而不是 payment_transactions
         $query = DB::table('order_main')
-            ->whereBetween('trade_Date', [$startDate, $endDate]);
+            ->whereBetween('trade_Date', [$startDate->toDateTimeString(), $endDate->toDateTimeString()]);
         
         if ($paymentMethod) {
             $query->where('payment_type', $paymentMethod);
@@ -42,6 +54,7 @@ class PaymentController extends Controller
         // 計算待對帳和已對帳的天數
         $allDatesWithTransactions = DB::table('order_main')
             ->select(DB::raw('DISTINCT DATE(trade_Date) as date'))
+            ->whereBetween('trade_Date', [$startDate->toDateTimeString(), $endDate->toDateTimeString()])
             ->orderBy('date')
             ->pluck('date')
             ->toArray();
@@ -50,6 +63,7 @@ class PaymentController extends Controller
         $reconciledDates = DB::table('order_main')
             ->select(DB::raw('DISTINCT DATE(trade_Date) as date'))
             ->whereIn('reconciliation_status', ['normal', 'abnormal', 'completed'])
+            ->whereBetween('trade_Date', [$startDate->toDateTimeString(), $endDate->toDateTimeString()])
             ->pluck('date')
             ->toArray();
             
@@ -59,7 +73,7 @@ class PaymentController extends Controller
         
         // 依日期分組的交易數據 (用於圖表)
         $dailyStats = DB::table('order_main')
-            ->whereBetween('trade_Date', [$startDate, $endDate])
+            ->whereBetween('trade_Date', [$startDate->toDateTimeString(), $endDate->toDateTimeString()])
             ->when($paymentMethod, function ($q) use ($paymentMethod) {
                 return $q->where('payment_type', $paymentMethod);
             })
@@ -76,11 +90,18 @@ class PaymentController extends Controller
         
         // 支付方式分佈
         $paymentMethods = DB::table('order_main')
-            ->whereBetween('trade_Date', [$startDate, $endDate])
+            ->whereBetween('trade_Date', [$startDate->toDateTimeString(), $endDate->toDateTimeString()])
             ->select('payment_type as payment_method', DB::raw('COUNT(*) as count'), DB::raw('SUM(total_price_with_discount) as total_amount'))
             ->groupBy('payment_type')
             ->orderByDesc('total_amount')
             ->get();
+        
+        // 調試日誌
+        \Log::info('Dashboard API Response', [
+            'stats' => $stats,
+            'daily_stats_count' => $dailyStats->count(),
+            'date_range' => $dailyStats->pluck('date')->toArray()
+        ]);
         
         return response()->json([
             'period' => [
@@ -433,15 +454,25 @@ class PaymentController extends Controller
     }
 
     /**
-     * 獲取指定日期範圍內的日交易概覽 (新版 - 按日分組)
-     * 
-     * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
+     * 獲取日交易摘要列表
      */
     public function getDailyTransactionsSummary(Request $request)
     {
-        $startDate = $request->input('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
-        $endDate = $request->input('end_date', Carbon::now()->format('Y-m-d'));
+        // 確保日期格式正確
+        $rawStartDate = $request->input('start_date');
+        $rawEndDate = $request->input('end_date');
+        
+        $startDate = $rawStartDate ? Carbon::parse($rawStartDate)->startOfDay() : Carbon::now()->startOfMonth()->startOfDay();
+        $endDate = $rawEndDate ? Carbon::parse($rawEndDate)->endOfDay() : Carbon::now()->endOfDay();
+        
+        // 日誌記錄，調試用
+        \Log::info('Daily Transaction Summary Request', [
+            'raw_start_date' => $rawStartDate,
+            'raw_end_date' => $rawEndDate,
+            'parsed_start_date' => $startDate->toDateTimeString(),
+            'parsed_end_date' => $endDate->toDateTimeString(),
+        ]);
+        
         $paymentMethod = $request->input('payment_method');
         $reconciliationStatus = $request->input('reconciliation_status');
         
@@ -457,8 +488,10 @@ class PaymentController extends Controller
             ->selectRaw('MAX(CASE WHEN reconciliation_status = "completed" THEN "completed" ELSE "pending" END) as reconciliation_status')
             ->selectRaw('MAX(reconciliation_notes) as reconciliation_notes')
             ->selectRaw('EXISTS(SELECT 1 FROM order_main om WHERE DATE(om.trade_Date) = DATE(order_main.trade_Date) AND om.notes IS NOT NULL AND om.notes != "") as has_note')
-            ->whereNotNull('trade_Date')
-            ->whereBetween('trade_Date', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
+            ->whereNotNull('trade_Date');
+            
+        // 使用確切的日期時間範圍篩選
+        $query->whereBetween('trade_Date', [$startDate->toDateTimeString(), $endDate->toDateTimeString()]);
         
         if ($paymentMethod) {
             $query->where('payment_type', $paymentMethod);
@@ -471,6 +504,12 @@ class PaymentController extends Controller
         $dailyTransactions = $query->groupBy(DB::raw('DATE(trade_Date)'))
             ->orderBy('date', 'desc')
             ->get();
+        
+        // 記錄返回的記錄數量，調試用
+        \Log::info('Daily Transaction Summary Response', [
+            'record_count' => $dailyTransactions->count(),
+            'date_range' => $dailyTransactions->pluck('date')->toArray()
+        ]);
         
         // 恢復正常的 SQL_MODE
         DB::statement("SET SQL_MODE=(SELECT @@sql_mode)");
@@ -612,13 +651,31 @@ class PaymentController extends Controller
      */
     public function getDailyReconciliations(Request $request)
     {
-        $startDate = $request->input('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
-        $endDate = $request->input('end_date', Carbon::now()->format('Y-m-d'));
+        // 解析日期並設置為當日開始/結束時間
+        $rawStartDate = $request->input('start_date');
+        $rawEndDate = $request->input('end_date');
+        
+        $startDate = $rawStartDate ? Carbon::parse($rawStartDate)->startOfDay() : Carbon::now()->startOfMonth()->startOfDay();
+        $endDate = $rawEndDate ? Carbon::parse($rawEndDate)->endOfDay() : Carbon::now()->endOfDay();
+        
+        // 調試日誌
+        \Log::info('Reconciliations API Request', [
+            'raw_start_date' => $rawStartDate,
+            'raw_end_date' => $rawEndDate,
+            'parsed_start_date' => $startDate->toDateString(),
+            'parsed_end_date' => $endDate->toDateString(),
+        ]);
         
         $reconciliations = DB::table('reconciliations')
-            ->whereBetween('reconciliation_date', [$startDate, $endDate])
+            ->whereBetween('reconciliation_date', [$startDate->toDateString(), $endDate->toDateString()])
             ->orderBy('reconciliation_date', 'desc')
             ->get();
+            
+        // 調試日誌
+        \Log::info('Reconciliations API Response', [
+            'record_count' => $reconciliations->count(),
+            'dates' => $reconciliations->pluck('reconciliation_date')->toArray()
+        ]);
         
         return response()->json($reconciliations);
     }
