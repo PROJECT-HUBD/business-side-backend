@@ -23,41 +23,62 @@ class PaymentController extends Controller
         // 篩選支付方式
         $paymentMethod = $request->get('payment_method');
         
-        // 基本查詢構建
-        $query = PaymentTransaction::whereBetween('payment_date', [$startDate, $endDate]);
+        // 基本查詢構建 - 使用 order_main 表而不是 payment_transactions
+        $query = DB::table('order_main')
+            ->whereBetween('trade_Date', [$startDate, $endDate]);
         
         if ($paymentMethod) {
-            $query->where('payment_method', $paymentMethod);
+            $query->where('payment_type', $paymentMethod);
         }
         
         // 統計資料
         $stats = [
-            'total_sales' => $query->sum('amount'),
+            'total_sales' => $query->sum('total_price_with_discount'),
             'transaction_count' => $query->count(),
-            'total_fees' => $query->sum('fee'),
-            'net_income' => $query->sum('net_amount'),
+            'total_fees' => $query->sum('fee_amount'),
+            'net_income' => $query->sum(DB::raw('total_price_with_discount - IFNULL(fee_amount, 0)')),
         ];
         
+        // 計算待對帳和已對帳的天數
+        $allDatesWithTransactions = DB::table('order_main')
+            ->select(DB::raw('DISTINCT DATE(trade_Date) as date'))
+            ->orderBy('date')
+            ->pluck('date')
+            ->toArray();
+            
+        // 已對帳的日期 (對帳狀態為 normal, abnormal 或 completed)
+        $reconciledDates = DB::table('order_main')
+            ->select(DB::raw('DISTINCT DATE(trade_Date) as date'))
+            ->whereIn('reconciliation_status', ['normal', 'abnormal', 'completed'])
+            ->pluck('date')
+            ->toArray();
+            
+        // 待對帳天數 = 有交易的天數 - 已對帳的天數
+        $stats['pending_reconciliation'] = count(array_diff($allDatesWithTransactions, $reconciledDates));
+        $stats['completed_reconciliation'] = count($reconciledDates);
+        
         // 依日期分組的交易數據 (用於圖表)
-        $dailyStats = PaymentTransaction::whereBetween('payment_date', [$startDate, $endDate])
+        $dailyStats = DB::table('order_main')
+            ->whereBetween('trade_Date', [$startDate, $endDate])
             ->when($paymentMethod, function ($q) use ($paymentMethod) {
-                return $q->where('payment_method', $paymentMethod);
+                return $q->where('payment_type', $paymentMethod);
             })
             ->select(
-                DB::raw('DATE(payment_date) as date'),
-                DB::raw('SUM(amount) as total_amount'),
+                DB::raw('DATE(trade_Date) as date'),
+                DB::raw('SUM(total_price_with_discount) as total_amount'),
                 DB::raw('COUNT(*) as transaction_count'),
-                DB::raw('SUM(fee) as total_fee'),
-                DB::raw('SUM(net_amount) as total_net_amount')
+                DB::raw('SUM(fee_amount) as total_fee'),
+                DB::raw('SUM(total_price_with_discount - IFNULL(fee_amount, 0)) as total_net_amount')
             )
             ->groupBy('date')
             ->orderBy('date')
             ->get();
         
         // 支付方式分佈
-        $paymentMethods = PaymentTransaction::whereBetween('payment_date', [$startDate, $endDate])
-            ->select('payment_method', DB::raw('COUNT(*) as count'), DB::raw('SUM(amount) as total_amount'))
-            ->groupBy('payment_method')
+        $paymentMethods = DB::table('order_main')
+            ->whereBetween('trade_Date', [$startDate, $endDate])
+            ->select('payment_type as payment_method', DB::raw('COUNT(*) as count'), DB::raw('SUM(total_price_with_discount) as total_amount'))
+            ->groupBy('payment_type')
             ->orderByDesc('total_amount')
             ->get();
         
