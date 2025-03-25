@@ -485,7 +485,7 @@ class PaymentController extends Controller
             ->selectRaw('SUM(total_price_with_discount) as total_amount')
             ->selectRaw('SUM(IFNULL(fee_amount, 0)) as total_fee')
             ->selectRaw('SUM(total_price_with_discount - IFNULL(fee_amount, 0)) as total_net_amount')
-            ->selectRaw('MAX(CASE WHEN reconciliation_status = "completed" THEN "completed" ELSE "pending" END) as reconciliation_status')
+            ->selectRaw('MAX(reconciliation_status) as reconciliation_status')
             ->selectRaw('MAX(reconciliation_notes) as reconciliation_notes')
             ->selectRaw('EXISTS(SELECT 1 FROM order_main om WHERE DATE(om.trade_Date) = DATE(order_main.trade_Date) AND om.notes IS NOT NULL AND om.notes != "") as has_note')
             ->whereNotNull('trade_Date');
@@ -555,7 +555,7 @@ class PaymentController extends Controller
                 DB::raw('SUM(total_price_with_discount) as total_amount'),
                 DB::raw('SUM(fee_amount) as total_fee'),
                 DB::raw('SUM(total_price_with_discount - fee_amount) as total_net_amount'),
-                DB::raw('MAX(CASE WHEN reconciliation_status = "completed" THEN "completed" ELSE "pending" END) as reconciliation_status'),
+                DB::raw('MAX(reconciliation_status) as reconciliation_status'),
                 DB::raw('MAX(reconciliation_notes) as reconciliation_notes'),
             ])
             ->whereRaw('DATE(trade_Date) = ?', [$date])
