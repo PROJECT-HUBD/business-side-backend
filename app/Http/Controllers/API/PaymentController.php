@@ -561,6 +561,14 @@ class PaymentController extends Controller
             ->whereRaw('DATE(trade_Date) = ?', [$date])
             ->first();
         
+        // 調試日誌
+        \Log::info('Daily Transaction Detail', [
+            'date' => $date,
+            'transaction_count' => $transactions->count(),
+            'stats' => $stats,
+            'reconciliation_status' => $stats->reconciliation_status
+        ]);
+        
         // 獲取訂單詳情 (可選，如果需要顯示訂單項目)
         foreach ($transactions as $transaction) {
             $orderDetails = DB::table('order_detail')
