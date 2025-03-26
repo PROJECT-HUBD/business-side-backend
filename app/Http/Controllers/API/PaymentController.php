@@ -826,4 +826,186 @@ class PaymentController extends Controller
         
         return response()->json($chartData);
     }
+
+    /**
+     * 導出交易記錄為 CSV 格式
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function exportTransactions(Request $request)
+    {
+        try {
+            // 記錄API被調用
+            \Log::info('Export transactions API called', [
+                'request_params' => $request->all(),
+                'user_agent' => $request->header('User-Agent')
+            ]);
+
+            // 確保日期格式正確
+            $rawStartDate = $request->input('start_date');
+            $rawEndDate = $request->input('end_date');
+            
+            $startDate = $rawStartDate ? Carbon::parse($rawStartDate)->startOfDay() : Carbon::now()->startOfMonth()->startOfDay();
+            $endDate = $rawEndDate ? Carbon::parse($rawEndDate)->endOfDay() : Carbon::now()->endOfDay();
+            
+            // 記錄日期範圍
+            \Log::info('Exporting transactions for date range', [
+                'start_date' => $startDate->toDateTimeString(),
+                'end_date' => $endDate->toDateTimeString()
+            ]);
+            
+            // 使用SQL_MODE='' 暫時關閉 ONLY_FULL_GROUP_BY 限制
+            DB::statement("SET SQL_MODE=''");
+            
+            $query = DB::table('order_main')
+                ->selectRaw('DATE(trade_Date) as date')
+                ->selectRaw('COUNT(*) as transaction_count')
+                ->selectRaw('SUM(total_price_with_discount) as total_amount')
+                ->selectRaw('SUM(IFNULL(fee_amount, 0)) as total_fee')
+                ->selectRaw('SUM(total_price_with_discount - IFNULL(fee_amount, 0)) as total_net_amount')
+                ->selectRaw('MAX(reconciliation_status) as reconciliation_status')
+                ->selectRaw('MAX(reconciliation_notes) as reconciliation_notes')
+                ->whereNotNull('trade_Date');
+                
+            // 使用確切的日期時間範圍篩選
+            $query->whereBetween('trade_Date', [$startDate->toDateTimeString(), $endDate->toDateTimeString()]);
+            
+            $dailyTransactions = $query->groupBy(DB::raw('DATE(trade_Date)'))
+                ->orderBy('date', 'desc')
+                ->get();
+                
+            \Log::info('Transactions query completed', [
+                'count' => $dailyTransactions->count()
+            ]);
+                
+            // 格式化數據，處理金額和日期格式
+            $exportData = $dailyTransactions->map(function($item) {
+                return [
+                    'date' => $item->date,
+                    'transaction_count' => $item->transaction_count,
+                    'total_amount' => number_format($item->total_amount, 0),
+                    'total_fee' => number_format($item->total_fee, 0),
+                    'total_net_amount' => number_format($item->total_net_amount, 0),
+                    'reconciliation_status' => $this->formatReconciliationStatus($item->reconciliation_status),
+                    'reconciliation_notes' => $item->reconciliation_notes ?: '無'
+                ];
+            });
+            
+            // 恢復正常的 SQL_MODE
+            DB::statement("SET SQL_MODE=(SELECT @@sql_mode)");
+            
+            \Log::info('Transactions export successful', [
+                'data_count' => $exportData->count()
+            ]);
+            
+            return response()->json($exportData);
+            
+        } catch (\Exception $e) {
+            \Log::error('Export transactions failed:', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'error' => '導出失敗，請稍後再試',
+                'details' => $e->getMessage()
+            ], 500);
+        }
+    }
+    
+    /**
+     * 導出對帳記錄為 CSV 格式
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function exportReconciliations(Request $request)
+    {
+        try {
+            // 記錄API被調用
+            \Log::info('Export reconciliations API called', [
+                'request_params' => $request->all(),
+                'user_agent' => $request->header('User-Agent')
+            ]);
+            
+            // 確保日期格式正確
+            $rawStartDate = $request->input('start_date');
+            $rawEndDate = $request->input('end_date');
+            
+            $startDate = $rawStartDate ? Carbon::parse($rawStartDate)->startOfDay() : Carbon::now()->startOfMonth()->startOfDay();
+            $endDate = $rawEndDate ? Carbon::parse($rawEndDate)->endOfDay() : Carbon::now()->endOfDay();
+            
+            \Log::info('Exporting reconciliations for date range', [
+                'start_date' => $startDate->toDateString(),
+                'end_date' => $endDate->toDateString()
+            ]);
+            
+            $reconciliations = DB::table('reconciliations')
+                ->whereBetween('reconciliation_date', [$startDate->toDateString(), $endDate->toDateString()])
+                ->orderBy('reconciliation_date', 'desc')
+                ->get();
+                
+            \Log::info('Reconciliations query completed', [
+                'count' => $reconciliations->count()
+            ]);
+                
+            // 格式化數據，處理金額和日期格式
+            $exportData = $reconciliations->map(function($item) {
+                return [
+                    'reconciliation_date' => $item->reconciliation_date,
+                    'reconciliation_number' => $item->reconciliation_number,
+                    'transaction_count' => $item->transaction_count,
+                    'total_amount' => number_format($item->total_amount, 0),
+                    'created_at' => Carbon::parse($item->created_at)->format('Y-m-d H:i:s'),
+                    'staff_name' => $item->staff_name ?: '系統',
+                    'status' => $this->formatReconciliationStatus($item->status),
+                    'notes' => $item->notes ?: '無'
+                ];
+            });
+            
+            \Log::info('Reconciliations export successful', [
+                'data_count' => $exportData->count()
+            ]);
+            
+            return response()->json($exportData);
+            
+        } catch (\Exception $e) {
+            \Log::error('Export reconciliations failed:', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'error' => '導出失敗，請稍後再試',
+                'details' => $e->getMessage()
+            ], 500);
+        }
+    }
+    
+    /**
+     * 格式化對帳狀態
+     * 
+     * @param string|null $status
+     * @return string
+     */
+    private function formatReconciliationStatus($status)
+    {
+        if (!$status) return '未對帳';
+        
+        $status = strtolower(trim($status));
+        
+        switch ($status) {
+            case 'normal':
+            case '1':
+            case 'completed':
+                return '正常';
+            case 'abnormal':
+                return '異常';
+            case 'pending':
+                return '待處理';
+            default:
+                return $status;
+        }
+    }
 }

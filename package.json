@@ -21,6 +21,7 @@
     "dependencies": {
         "cors": "^2.8.5",
         "express": "^4.21.2",
+        "react-csv": "^2.2.2",
         "serve": "^14.2.4"
     }
 }

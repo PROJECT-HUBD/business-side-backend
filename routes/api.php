@@ -52,37 +52,55 @@ Route::get('/dashboard/recent-orders', [DashboardController::class, 'getRecentOr
 Route::get('/dashboard/sales-chart', [DashboardController::class, 'getSalesChart']);
 Route::get('/dashboard/product-stats', [DashboardController::class, 'getProductStats']);
 
-// 金流管理路由
-Route::get('/payments/dashboard', [PaymentController::class, 'dashboard']);
-Route::get('/payments/transactions', [PaymentController::class, 'getTransactions']);
-Route::get('/payments/daily/{date}', [PaymentController::class, 'getDailyTransactions']);
-Route::post('/payments/reconciliation/{date}', [PaymentController::class, 'updateReconciliation']);
-Route::get('/payments/export-csv', [PaymentController::class, 'exportCsv']);
-Route::get('/payments/export-excel', [PaymentController::class, 'exportExcel']);
+// -------------------------------------------------------------------------
+// 金流管理相關路由 - 不需要認證的 API
+// -------------------------------------------------------------------------
 
-// 金流設定相關路由
-Route::prefix('cash-flow-settings')->group(function () {
-    Route::get('/', 'App\Http\Controllers\API\CashFlowController@index');
-    Route::post('/', 'App\Http\Controllers\API\CashFlowController@store');
-    Route::get('/{name}', 'App\Http\Controllers\API\CashFlowController@show');
-    Route::put('/{name}', 'App\Http\Controllers\API\CashFlowController@update');
-    Route::delete('/{name}', 'App\Http\Controllers\API\CashFlowController@destroy');
-});
+// 金流管理儀表板
+Route::get('/payments/dashboard', [PaymentController::class, 'dashboard']);
+Route::get('/payments/chart-data', [PaymentController::class, 'getChartData']);
+
+// 金流數據導出
+Route::get('/payments/transactions/export', [PaymentController::class, 'exportTransactions']);
+Route::get('/payments/reconciliations/export', [PaymentController::class, 'exportReconciliations']);
+Route::get('/payments/export-excel', [PaymentController::class, 'exportExcel']);
+Route::get('/payments/export-csv', [PaymentController::class, 'exportCsv']);
 
 // 金流數據相關路由
 Route::prefix('transactions')->group(function () {
-    Route::get('/daily-summary', 'App\Http\Controllers\API\PaymentController@getDailyTransactionsSummary');
-    Route::get('/daily/{date}', 'App\Http\Controllers\API\PaymentController@getDailyTransactionDetail');
-    Route::post('/{transactionId}/note', 'App\Http\Controllers\API\PaymentController@addOrderNote');
-    Route::get('/stats', 'App\Http\Controllers\API\PaymentController@getDailyTransactionStats');
-    Route::get('/export-excel', 'App\Http\Controllers\API\PaymentController@exportExcel');
-    Route::get('/export-csv', 'App\Http\Controllers\API\PaymentController@exportCsv');
-    Route::get('/order/{orderId}', 'App\Http\Controllers\API\PaymentController@getOrderDetail');
-    Route::get('/chart-data', 'App\Http\Controllers\API\PaymentController@getChartData');
+    Route::get('/daily-summary', [PaymentController::class, 'getDailyTransactionsSummary']);
+    Route::get('/daily/{date}', [PaymentController::class, 'getDailyTransactionDetail']);
+    Route::post('/{transactionId}/note', [PaymentController::class, 'addOrderNote']);
+    Route::get('/stats', [PaymentController::class, 'getDailyTransactionStats']);
+    Route::get('/order/{orderId}', [PaymentController::class, 'getOrderDetail']);
+    Route::get('/chart-data', [PaymentController::class, 'getChartData']);
 });
 
 // 對帳相關路由
 Route::prefix('reconciliations')->group(function () {
-    Route::get('/', 'App\Http\Controllers\API\PaymentController@getDailyReconciliations');
-    Route::post('/daily/{date}', 'App\Http\Controllers\API\PaymentController@reconcileDailyTransactions');
+    Route::get('/', [PaymentController::class, 'getDailyReconciliations']);
+    Route::post('/daily/{date}', [PaymentController::class, 'reconcileDailyTransactions']);
+    Route::post('/daily', [PaymentController::class, 'reconcileDailyTransactions']);
+});
+
+// 金流設定相關路由
+Route::prefix('cash-flow-settings')->group(function () {
+    Route::get('/', [CashFlowController::class, 'index']);
+    Route::post('/', [CashFlowController::class, 'store']);
+    Route::get('/{name}', [CashFlowController::class, 'show']);
+    Route::put('/{name}', [CashFlowController::class, 'update']);
+    Route::delete('/{name}', [CashFlowController::class, 'destroy']);
+});
+
+// -------------------------------------------------------------------------
+// 需要認證的 API
+// -------------------------------------------------------------------------
+Route::middleware(['auth:sanctum'])->group(function () {
+    // 支付相關路由（需要認證）
+    Route::prefix('payments')->group(function () {
+        Route::get('/daily-transactions', [PaymentController::class, 'getDailyTransactionsSummary']);
+        Route::get('/daily-transaction-detail', [PaymentController::class, 'getDailyTransactionDetail']);
+        Route::get('/order-detail/{orderId}', [PaymentController::class, 'getOrderDetailById']);
+        Route::put('/update-reconciliation-status', [PaymentController::class, 'updateReconciliationStatus']);
+    });
 });
