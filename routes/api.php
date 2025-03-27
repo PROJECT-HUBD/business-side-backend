@@ -1,31 +1,47 @@
 <?php
 
+namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\API\ProductController;
-use App\Http\Controllers\API\CategoryController;
-use App\Http\Controllers\API\UserController;
-use App\Http\Controllers\API\CouponController;
-use App\Http\Controllers\API\CampaignController;
-use App\Http\Controllers\API\DashboardController;
-use App\Http\Controllers\API\PaymentController;
-use App\Http\Controllers\API\CashFlowController;
+// use App\Http\Controllers\API\ProductController;
 
 // 使用者基本請求
-Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
+Route::get('/user', function (Request $request) {
     return $request->user();
-});
+})->middleware('auth:sanctum');
 
-// 會員路由
-Route::get('/users', [UserController::class, 'index']);
-Route::get('/users/{id}', [UserController::class, 'show']);
+// 商品管理
+Route::get('/products', [ProductController::class, 'index']); // 取得商品列表
+Route::post('/products', [ProductController::class, 'store']); // 新增商品
+Route::get('/products/spec', [ProductController::class, 'productswithspec']); // 取得扁平化產品資料（用於市場行銷的適用商品） 
+Route::put('/products/{id}', [ProductController::class, 'update']); // 更新商品
+Route::get('/products/{id}', [ProductController::class, 'show']); // 取得單一商品
 
-// 用於測試的路由，添加隨機生日
-Route::post('/users/add-random-birthdays', [UserController::class, 'addRandomBirthdays']);
 
-// 產品路由
-Route::get('/products', [ProductController::class, 'index']);
-Route::get('/products/{id}', [ProductController::class, 'show']);
+// 訂單管理
+Route::get('/order', [OrderController::class, 'getOrderAll']);
+Route::get('/orderdetail', [OrderController::class, 'getOrderDetails']);
+Route::get('/orderWithDetails', [OrderController::class, 'getOrderWithDetails']);
+Route::get('/order/{order_id}', [OrderController::class, 'getOrder']);
+
+// 用戶管理
+Route::get('/users', [UserController::class, 'index']); // 取得所有用戶
+Route::get('/users/{id}', [UserController::class, 'show']); // 取得特定用戶
+Route::get('/users/{id}/orders', [UserController::class, 'getUserOrders']);//獲取order_main資料
+
+// 賣場管理
+Route::get('/banners', [StoreController::class, 'index']);
+Route::post('/banners/{id}', [StoreController::class, 'update']); // 確保這裡是 POST
+
+// 維護管理
+Route::get('/maintenance', [MaintenanceController::class, 'index']);
+Route::post('/maintenance', [MaintenanceController::class, 'store']);
+Route::delete('/maintenance', [MaintenanceController::class, 'destroy']);
+
+// 維護管理
+Route::get('/maintenance', [MaintenanceController::class, 'indexMaintenance']);
+Route::post('/maintenance', [MaintenanceController::class, 'storeMaintenance']);
+Route::delete('/maintenance', [MaintenanceController::class, 'destroyMaintenance']);
 
 // 分類路由
 Route::get('/categories', [CategoryController::class, 'index']);

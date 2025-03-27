@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 class UserController extends Controller
 {
     // 取得所有用戶資料
@@ -43,4 +45,35 @@ class UserController extends Controller
         'totalSpent' => (float)$totalSpent
     ]);
 }
+
+    /**
+     * Update the specified resource in storage.
+     */
+    public function update(Request $request, string $id)
+    {
+        try {
+            $user = User::findOrFail($id);
+
+            $validatedData = $request->validate([
+                'name' => 'sometimes|string|max:255',
+                'email' => 'sometimes|string|email|max:255|unique:users,email,' . $id,
+                'password' => 'sometimes|string|min:8',
+                'phone' => 'nullable|string|max:20',
+                'birthday' => 'nullable|date', // 確保生日是有效的日期格式
+            ]);
+
+            if (isset($validatedData['password'])) {
+                $validatedData['password'] = Hash::make($validatedData['password']);
+            }
+
+            $user->update($validatedData);
+
+            return response()->json($user);
+        } catch (ValidationException $e) {
+            return response()->json(['errors' => $e->errors()], 422);
+        } catch (\Exception $e) {
+            \Log::error('Error updating user', ['id' => $id, 'error' => $e->getMessage()]);
+            return response()->json(['error' => '更新用戶失敗'], 500);
+        }
+    }
 }

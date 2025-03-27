@@ -19,14 +19,14 @@ class ProductController extends Controller
     }
 
     // 取得單一商品
-    public function show($id)
-    {
-        $product = Product::with(['specifications', 'images', 'information', 'displayImages', 'classifiction'])->find($id);
-        if (!$product) {
-            return response()->json(['error' => '商品不存在'], 404);
-        }
-        return response()->json($product);
-    }
+    // public function show($id)
+    // {
+    //     $product = Product::with(['specifications', 'images', 'information', 'displayImages', 'classifiction'])->find($id);
+    //     if (!$product) {
+    //         return response()->json(['error' => '商品不存在'], 404);
+    //     }
+    //     return response()->json($product);
+    // }
 
     // 新增商品
     public function store(Request $request)
@@ -371,5 +371,59 @@ class ProductController extends Controller
         }
 
         return response()->json(['message' => '商品更新成功', 'product_id' => $id]);
+    }
+
+    /**
+     * 取得扁平化產品資料（用於市場行銷的適用商品）
+     * 
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function productswithspec()
+    {
+        $products = Product::with(['specifications', 'images', 'information', 'displayImages', 'classifiction'])->get();
+        
+        $formattedProducts = [];
+        
+        foreach ($products as $product) {
+            // 處理無規格的產品
+            if ($product->specifications->isEmpty()) {
+                $formattedProducts[] = [
+                    'id' => $product->product_id,
+                    'product_id' => $product->product_id,
+                    'name' => $product->product_name,
+                    'price' => $product->product_price,
+                    'stock' => 0, // 無規格產品默認庫存
+                    'image' => url('storage/' . $product->product_img),
+                    'description' => $product->product_description,
+                    'color' => null,
+                    'size' => null,
+                    'sku' => $product->product_id,
+                    'created_at' => $product->created_at,
+                    'updated_at' => $product->updated_at
+                ];
+            }
+            
+            // 處理有規格的產品
+            foreach ($product->specifications as $spec) {
+                $formattedProducts[] = [
+                    'id' => $spec->spec_id,
+                    'spec_id' => $spec->spec_id,
+                    'product_id' => $product->product_id,
+                    'main_product_id' => $product->product_id,
+                    'name' => $product->product_name,
+                    'price' => $product->product_price,
+                    'stock' => $spec->product_stock,
+                    'image' => url('storage/' . $product->product_img),
+                    'description' => $product->product_description,
+                    'color' => $spec->product_color,
+                    'size' => $spec->product_size,
+                    'sku' => $spec->spec_id,
+                    'created_at' => $product->created_at,
+                    'updated_at' => $product->updated_at
+                ];
+            }
+        }
+        
+        return response()->json($formattedProducts);
     }
 }
