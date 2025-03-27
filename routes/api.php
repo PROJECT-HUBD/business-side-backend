@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-// use App\Http\Controllers\API\ProductController;
 
 // 使用者基本請求
 Route::get('/user', function (Request $request) {
